@@ -12,10 +12,11 @@ namespace delete_ami
 {
     public class Program
     {
+        const string ownerId = "self";
         public static void Main(string[] args)
         {
-//           Task.Run(DeleteAmis).Wait();
-//            Task.Run(DeleteOrphanSnapshots).Wait();
+            // Task.Run(DeleteAmis).Wait();
+            // Task.Run(DeleteOrphanSnapshots).Wait();
             Task.Run(DeleteOrphanEBSVolumes).Wait();
         }
 
@@ -25,7 +26,8 @@ namespace delete_ami
             var describeVolumesRequest = new DescribeVolumesRequest();
             var volumes = await client.DescribeVolumesAsync(describeVolumesRequest);
 
-            foreach (var volume in volumes.Volumes.Where(x => x.Attachments.Count == 0 && x.State == "available"))
+            const string ebsAvailable = "available";
+            foreach (var volume in volumes.Volumes.Where(x => x.Attachments.Count == 0 && x.State == ebsAvailable))
             {
                 Console.WriteLine($"Deleting volume {volume.VolumeId}...");
                 await client.DeleteVolumeAsync(new DeleteVolumeRequest(volume.VolumeId));
@@ -35,12 +37,14 @@ namespace delete_ami
         private static async Task DeleteOrphanSnapshots()
         {
             var client = new AmazonEC2Client(RegionEndpoint.APSoutheast2);
-            var rr = new DescribeSnapshotsRequest();
-            rr.OwnerIds.Add("self");
-            var snapshots = await client.DescribeSnapshotsAsync(rr);
-            var request = new DescribeImagesRequest();
-            request.Owners.Add("self");
-            var images = await client.DescribeImagesAsync(request);
+            var describeSnapshotRequest = new DescribeSnapshotsRequest();
+            describeSnapshotRequest.OwnerIds.Add(ownerId);
+
+            var snapshots = await client.DescribeSnapshotsAsync(describeSnapshotRequest);
+            var describeImagesRequest = new DescribeImagesRequest();
+            describeImagesRequest.Owners.Add(ownerId);
+
+            var images = await client.DescribeImagesAsync(describeImagesRequest);
             foreach (var snapshot in snapshots.Snapshots.Where(s =>
                 !images.Images.Any(i => i.BlockDeviceMappings.Any(d => d.Ebs.SnapshotId == s.SnapshotId)) &&
                 DateTime.Today.Subtract(s.StartTime).Days > 30))
@@ -56,7 +60,7 @@ namespace delete_ami
             var asgClient = new AmazonAutoScalingClient(RegionEndpoint.APSoutheast2);
 
             var request = new DescribeImagesRequest();
-            request.Owners.Add("self");
+            request.Owners.Add(ownerId);
             var images = await client.DescribeImagesAsync(request);
             var launchConfigs = await asgClient.DescribeLaunchConfigurationsAsync();
 
