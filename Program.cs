@@ -45,9 +45,11 @@ namespace delete_ami
             describeImagesRequest.Owners.Add(ownerId);
 
             var images = await client.DescribeImagesAsync(describeImagesRequest);
+
+            const int numberOfdaysToKeepImage = 30;
             foreach (var snapshot in snapshots.Snapshots.Where(s =>
                 !images.Images.Any(i => i.BlockDeviceMappings.Any(d => d.Ebs.SnapshotId == s.SnapshotId)) &&
-                DateTime.Today.Subtract(s.StartTime).Days > 30))
+                DateTime.Today.Subtract(s.StartTime).Days > numberOfdaysToKeepImage))
             {
                 Console.WriteLine($"Deleting snapshot {snapshot.Description}...");
                 await client.DeleteSnapshotAsync(new DeleteSnapshotRequest(snapshot.SnapshotId));
@@ -64,7 +66,8 @@ namespace delete_ami
             var images = await client.DescribeImagesAsync(request);
             var launchConfigs = await asgClient.DescribeLaunchConfigurationsAsync();
 
-            foreach (var image in images.Images.Where(x => DateTime.Parse(x.CreationDate) < new DateTime(2018, 11, 03)))
+            var dateToKeepAmisFrom = new DateTime(2018, 11, 03);
+            foreach (var image in images.Images.Where(x => DateTime.Parse(x.CreationDate) < dateToKeepAmisFrom))
             {
                 Console.WriteLine($"Deleting Image: {image.ImageId} - {image.Name}...");
                 if (!image.Tags.Any(t => t.Key == "Master"))
